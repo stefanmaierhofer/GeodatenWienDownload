@@ -2,38 +2,57 @@
 open System.Net
 open System.IO
 open System.Threading
+open Flurl
 
-let basedir = "T:/Geodaten/Wien"
-let baseurl = "https://www.wien.gv.at/ma41datenviewer/downloads/ma41/geodaten/lod2_gml";
+let targetdir = "T:/Geodaten/Wien"
+let baseurl = "https://www.wien.gv.at/ma41datenviewer/downloads/ma41/geodaten"
 
-let createFilename x y = String.Format("{0:000}{1:000}_lod2_gml.zip", x, y)
-let createTargetFilename x y = sprintf "%s/%s" basedir (createFilename x y)
-let createUrl x y = sprintf "%s/%s" baseurl (createFilename x y)
-let createDoesNotExistFilename x y = sprintf "%s/%s" basedir (String.Format("{0:000}{1:000}_does_not_exist", x, y))
-let alreadyDownloaded x y = File.Exists(createDoesNotExistFilename x y) || File.Exists(createTargetFilename x y)
+type Item = { Filename : string; FilenameFull : string; Url : string}
+
+let createItem prefix f = { Filename = f; FilenameFull = Path.Combine(targetdir, prefix, f); Url = Url.Combine(baseurl, prefix, f) }
+
+let seqLod2Gml () = seq {
+    for x in [78..136] do
+        for y in [62..107] do
+            yield createItem "lod2_gml" (String.Format("{0:000}{1:000}_lod2_gml.zip", x, y))
+    }
+    
+let private seqMeta dir s () = seq {
+    for x in [15..58] do
+        for y in [1..4] do
+            yield createItem dir (String.Format("{0}_{1}_{2}.zip", x, y, s))
+    }
+let seqDgmTif = seqMeta "dgm_tif" "dgm_tif"
+let seqFmzkShp = seqMeta "fmzk_shp" "fmzk"
+
+let ensureDirectory name = if Directory.Exists(name) = false then Directory.CreateDirectory(name) |> ignore
+
+let download prefix items =
+    let wc = new WebClient()
+    ensureDirectory targetdir
+    ensureDirectory (Path.Combine(targetdir, prefix))
+    for item in items () do
+        let targetNA = item.FilenameFull + ".does_not_exist"
+
+        if File.Exists(item.FilenameFull) || File.Exists(targetNA) then
+            printfn "%s -> cached" item.Filename
+        else
+            try
+                wc.DownloadFile(item.Url, item.FilenameFull)
+                printfn "%s -> downloaded" item.Filename
+
+            with
+            | ex -> printfn "%s -> %s" item.Filename ex.Message
+                    File.WriteAllText(targetNA, "")
+                    
+            Thread.Sleep(500)
 
 [<EntryPoint>]
 let main argv =
-    if Directory.Exists(basedir) = false then Directory.CreateDirectory(basedir) |> ignore
 
-    let wc = new WebClient()
-    for x in [78..136] do
-        for y in [62..107] do
-            if alreadyDownloaded x y then
-                printfn "%s -> cached" (createFilename x y)
-            else
-                let url = createUrl x y
-                let targetfile = createTargetFilename x y
-            
-                try
-                  wc.DownloadFile(url, targetfile)
-                  printfn "%s -> downloaded" (createFilename x y)
-
-                with
-                | ex -> printfn "%s -> %s" (createFilename x y) ex.Message
-                        File.WriteAllText(createDoesNotExistFilename x y, "")
-                    
-                Thread.Sleep(1000)
+    download "lod2_gml" seqLod2Gml
+    download "dgm_tif" seqDgmTif
+    download "fmzk_shp" seqFmzkShp
 
     0
     
