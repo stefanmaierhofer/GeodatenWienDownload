@@ -8,25 +8,55 @@ let targetdir = "T:/Geodaten/Wien"
 let baseurl = "https://www.wien.gv.at/ma41datenviewer/downloads/ma41/geodaten"
 
 type Item = { Filename : string; FilenameFull : string; Url : string}
+type SeqType = Fine | Coarse
+type Dataset = { Type : SeqType; Dir : string; Name : string}
 
+let datasets = [|
+    // Luftaufnahmen
+    { Type = Coarse;    Dir = "op_img";         Name = "op" }
+    { Type = Coarse;    Dir = "op_img";         Name = "op_2017" }
+    { Type = Coarse;    Dir = "op_img";         Name = "op_2016" }
+    { Type = Coarse;    Dir = "op_img";         Name = "op_2015" }
+    { Type = Coarse;    Dir = "op_img";         Name = "op2014" }
+    { Type = Coarse;    Dir = "lb_img";         Name = "lb1956" }
+    { Type = Coarse;    Dir = "lb_img";         Name = "lb1938" }
+    // MZK Vektordaten
+    { Type = Fine;      Dir = "vmzk_dxf";       Name = "mzk" }
+    // MZK Rasterdaten
+    { Type = Coarse;    Dir = "vmzk_img";       Name = "mzkfarb" }
+    // Flächen-MZK Vektordaten
+    { Type = Coarse;    Dir = "fmzk_shp";       Name = "fmzk" }
+    // Flächen-MZK Rasterdaten
+    { Type = Coarse;    Dir = "fmzk_img";       Name = "fmzkrt" }
+    // Baukörpermodell (LOD1)
+    { Type = Fine;      Dir = "lod1_dxf";       Name = "lod1" }
+    { Type = Fine;      Dir = "fmzk_bkm";       Name = "bkm" }
+    // Generalisiertes Dachmodell (LOD2)
+    { Type = Fine;      Dir = "lod2_gml";       Name = "lod2_gml" }
+    { Type = Fine;      Dir = "lod2_dxf";       Name = "lod2_dxf" }
+    // Geländemodell (DGM)
+    { Type = Coarse;    Dir = "dgm_iso_shp";    Name = "dgm_iso" }
+    { Type = Coarse;    Dir = "dgm_tif";        Name = "dgm_tif" }
+    { Type = Coarse;    Dir = "dgm_asc";        Name = "dgm_asc" }
+    { Type = Coarse;    Dir = "dgm_tin_dxf";    Name = "dgm_tin" }
+    { Type = Coarse;    Dir = "dgm_bk_shp";     Name = "dgm_bk" }
+    // Oberflächenmodell (DOM)
+    { Type = Coarse;    Dir = "dom_asc";        Name = "dom_asc" }
+    { Type = Coarse;    Dir = "dom_tif";        Name = "dom_tif" }
+    |]
+    
 let createItem prefix f = { Filename = f; FilenameFull = Path.Combine(targetdir, prefix, f); Url = Url.Combine(baseurl, prefix, f) }
-
-let seqLod2Gml () = seq {
+let seqFine dir s () = seq {
     for x in [78..136] do
         for y in [62..107] do
-            yield createItem "lod2_gml" (String.Format("{0:000}{1:000}_lod2_gml.zip", x, y))
+            yield createItem dir (String.Format("{0:000}{1:000}_{2}.zip", x, y, s))
     }
-    
-let private seqMeta dir s () = seq {
+let seqCoarse dir s () = seq {
     for x in [15..58] do
         for y in [1..4] do
             yield createItem dir (String.Format("{0}_{1}_{2}.zip", x, y, s))
     }
-let seqDgmTif = seqMeta "dgm_tif" "dgm_tif"
-let seqFmzkShp = seqMeta "fmzk_shp" "fmzk"
-
 let ensureDirectory name = if Directory.Exists(name) = false then Directory.CreateDirectory(name) |> ignore
-
 let download prefix items =
     let wc = new WebClient()
     ensureDirectory targetdir
@@ -50,9 +80,9 @@ let download prefix items =
 [<EntryPoint>]
 let main argv =
 
-    download "lod2_gml" seqLod2Gml
-    download "dgm_tif" seqDgmTif
-    download "fmzk_shp" seqFmzkShp
+    for x in datasets do
+        let seq = match x.Type with | Fine -> seqFine | Coarse -> seqCoarse
+        download x.Dir (seq x.Dir x.Name)
 
     0
-    
+ 
